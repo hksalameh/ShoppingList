@@ -167,7 +167,8 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
 
     val categories = listOf("الكل") + viewModel.items.map { it.category }.distinct()
     val visible = viewModel.items.filter {
-        (category == "الكل" || it.category == category) &&
+        !it.selected &&
+            (category == "الكل" || it.category == category) &&
             (search.isBlank() || it.name.contains(search, ignoreCase = true))
     }
 
