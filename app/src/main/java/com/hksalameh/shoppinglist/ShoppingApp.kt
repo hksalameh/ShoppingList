@@ -41,8 +41,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -83,22 +83,11 @@ fun ShoppingApp(viewModel: ShoppingViewModel) {
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            text = "مشترياتي",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = when {
-                                viewModel.selectedCount == 0 -> "قائمة البيت دائمًا جاهزة"
-                                viewModel.remainingCount == 0 -> "تم شراء جميع المواد ✓"
-                                else -> "${viewModel.remainingCount} متبقي من ${viewModel.selectedCount}"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = "مشترياتي",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
                 },
                 actions = {
                     if (viewModel.selectedCount > 0) {
@@ -109,7 +98,7 @@ fun ShoppingApp(viewModel: ShoppingViewModel) {
                         ) {
                             Text(
                                 text = viewModel.selectedCount.toString(),
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 fontWeight = FontWeight.Bold
                             )
@@ -174,23 +163,21 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            HomeSummaryCard(viewModel)
-
             OutlinedTextField(
                 value = search,
                 onValueChange = { search = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 placeholder = { Text("ابحث عن مادة…") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(14.dp),
                 singleLine = true
             )
 
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(categories) { itemCategory ->
                     FilterChip(
@@ -200,20 +187,13 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
                             Icon(
                                 imageVector = categoryIcon(itemCategory),
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         },
                         label = { Text(itemCategory) }
                     )
                 }
             }
-
-            Text(
-                text = "اضغط على أي مادة لإضافتها إلى سلة التسوق",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
-            )
 
             if (visible.isEmpty()) {
                 EmptyState(
@@ -225,8 +205,8 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 104.dp),
-                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 76.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     val grouped = visible.groupBy { it.category }
                     grouped.forEach { (groupName, groupItems) ->
@@ -246,14 +226,14 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
             }
         }
 
-        ExtendedFloatingActionButton(
+        FloatingActionButton(
             onClick = { adding = true },
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(18.dp),
-            icon = { Icon(Icons.Default.Add, contentDescription = null) },
-            text = { Text("إضافة مادة") }
-        )
+                .padding(12.dp)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "إضافة مادة")
+        }
     }
 
     if (adding) {
@@ -302,86 +282,38 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
 }
 
 @Composable
-private fun HomeSummaryCard(viewModel: ShoppingViewModel) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        shape = RoundedCornerShape(28.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                modifier = Modifier.size(54.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.LocalGroceryStore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "قائمة البيت",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    if (viewModel.selectedCount == 0)
-                        "اختر ما تحتاجه اليوم، والقائمة الأصلية ستبقى محفوظة."
-                    else
-                        "أضفت ${viewModel.selectedCount} مواد • المتبقي ${viewModel.remainingCount}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun CategoryHeader(name: String, selected: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp, bottom = 2.dp),
+            .padding(top = 6.dp, bottom = 1.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.secondaryContainer,
-            modifier = Modifier.size(34.dp)
+            modifier = Modifier.size(28.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = categoryIcon(name),
                     contentDescription = null,
-                    modifier = Modifier.size(19.dp),
+                    modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             }
         }
-        Spacer(Modifier.width(9.dp))
-        Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.width(7.dp))
+        Text(name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         if (selected > 0) {
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {
                 Text(
-                    "$selected مختارة",
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                    "$selected",
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
@@ -401,46 +333,45 @@ private fun MasterItemCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onToggle),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.elevatedCardColors(
-            containerColor = if (item.selected)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = if (item.selected) 1.dp else 2.dp)
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 6.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Checkbox(
-                checked = item.selected,
+                checked = false,
                 onCheckedChange = { onToggle() }
             )
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (item.selected) FontWeight.SemiBold else FontWeight.Normal
+            Text(
+                text = item.name,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge
+            )
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "تعديل ${item.name}",
+                    modifier = Modifier.size(20.dp)
                 )
-                if (item.selected) {
-                    Text(
-                        "في السلة",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
             }
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "تعديل ${item.name}")
-            }
-            IconButton(onClick = onDelete) {
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(40.dp)
+            ) {
                 Icon(
                     Icons.Default.Delete,
                     contentDescription = "حذف ${item.name}",
+                    modifier = Modifier.size(20.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
