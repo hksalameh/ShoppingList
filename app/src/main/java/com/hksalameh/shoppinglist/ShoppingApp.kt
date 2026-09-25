@@ -545,7 +545,8 @@ private fun CartScreen(viewModel: ShoppingViewModel, modifier: Modifier = Modifi
                 items(visible, key = { it.id }) { item ->
                     CartItemCard(
                         item = item,
-                        onTogglePurchased = { viewModel.togglePurchased(item.id) }
+                        onTogglePurchased = { viewModel.togglePurchased(item.id) },
+                        onReturnToList = { viewModel.toggleSelected(item.id) }
                     )
                 }
             }
@@ -640,7 +641,11 @@ private fun CartProgressCard(viewModel: ShoppingViewModel) {
 }
 
 @Composable
-private fun CartItemCard(item: ShoppingItem, onTogglePurchased: () -> Unit) {
+private fun CartItemCard(
+    item: ShoppingItem,
+    onTogglePurchased: () -> Unit,
+    onReturnToList: () -> Unit
+) {
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -676,22 +681,18 @@ private fun CartItemCard(item: ShoppingItem, onTogglePurchased: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Surface(
-                shape = CircleShape,
-                color = if (item.purchased)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.surfaceVariant
+            OutlinedButton(
+                onClick = onReturnToList,
+                shape = RoundedCornerShape(14.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
             ) {
                 Icon(
-                    imageVector = if (item.purchased) Icons.Default.CheckCircle else categoryIcon(item.category),
-                    contentDescription = null,
-                    modifier = Modifier.padding(9.dp).size(21.dp),
-                    tint = if (item.purchased)
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                    Icons.Default.List,
+                    contentDescription = "إرجاع ${item.name} إلى القائمة",
+                    modifier = Modifier.size(18.dp)
                 )
+                Spacer(Modifier.width(4.dp))
+                Text("إرجاع")
             }
         }
     }
