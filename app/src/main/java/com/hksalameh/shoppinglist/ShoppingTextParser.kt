@@ -83,6 +83,9 @@ internal fun uniqueImportItems(rows: List<ImportItem>): List<ImportItem> {
 }
 
 // PaddleOCR emits glyphs in image order. Keep numbers and Latin text together when reversing Arabic.
-private val visualTextTokens = Regex("""[\p{Nd}A-Za-z]+(?:[.,٫٬/]\p{Nd}+)*|.""")
+private val visualTextTokens = Regex("""[\p{Nd}A-Za-z]+(?:[.,٫٬/ر]\p{Nd}+)*|.""")
+private val misreadDecimal = Regex("""(?<=\p{Nd})ر(?=\p{Nd})""")
+
 internal fun logicalArabicText(visual: String): String =
-    visualTextTokens.findAll(visual).map { it.value }.toList().asReversed().joinToString("").trim()
+    visualTextTokens.findAll(visual).map { it.value }.toList().asReversed()
+        .joinToString("").replace(misreadDecimal, "٫").trim()

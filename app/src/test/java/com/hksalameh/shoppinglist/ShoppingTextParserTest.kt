@@ -36,6 +36,10 @@ class ShoppingTextParserTest {
     fun reordersVisualArabicWithoutReversingNumbersOrLatin() {
         assertEquals("حليب ١٫٥ لتر", logicalArabicText("رتل ١٫٥ بيلح"))
         assertEquals("طحين2", logicalArabicText("2نيحط"))
+        assertEquals(
+            listOf(ImportItem("رز بسمتي", "١٫٥ كيلو")),
+            parseShoppingText(logicalArabicText("وليك ١ر٥يتمسب زر"))
+        )
         assertEquals("رز 1.5 kg", logicalArabicText("kg 1.5 زر"))
         assertEquals(listOf(ImportItem("طحين", "2")), parseShoppingText("طحين2"))
     }
