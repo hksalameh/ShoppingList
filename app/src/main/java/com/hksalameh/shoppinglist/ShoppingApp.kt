@@ -21,13 +21,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Kitchen
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.LocalGroceryStore
@@ -59,9 +57,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,8 +75,13 @@ enum class CartFilter { REMAINING, ALL, PURCHASED }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ShoppingApp(viewModel: ShoppingViewModel) {
-    var page by remember { mutableStateOf(AppPage.LIST) }
+internal fun ShoppingApp(viewModel: ShoppingViewModel, photoImport: PhotoImportViewModel) {
+    var page by rememberSaveable { mutableStateOf(AppPage.LIST) }
+    var lastShare by rememberSaveable { mutableStateOf(0) }
+    LaunchedEffect(photoImport.shareRequest) {
+        if (photoImport.shareRequest > lastShare) page = AppPage.PHOTO
+        lastShare = photoImport.shareRequest
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -141,7 +146,10 @@ fun ShoppingApp(viewModel: ShoppingViewModel) {
         when (page) {
             AppPage.LIST -> MasterListScreen(viewModel, Modifier.padding(padding))
             AppPage.CART -> CartScreen(viewModel, Modifier.padding(padding))
-            AppPage.PHOTO -> PhotoScreen(viewModel, Modifier.padding(padding))
+            AppPage.PHOTO -> PhotoScreen(
+                viewModel, photoImport, Modifier.padding(padding),
+                onOpenCart = { page = AppPage.CART }
+            )
         }
     }
 }
@@ -153,6 +161,7 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
     var editing by remember { mutableStateOf<ShoppingItem?>(null) }
     var adding by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<ShoppingItem?>(null) }
+    var clearing by rememberSaveable { mutableStateOf(false) }
 
     val categories = listOf("الكل") + viewModel.items.map { it.category }.distinct()
     val visible = viewModel.items.filter {
@@ -171,6 +180,13 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
                     .padding(horizontal = 12.dp, vertical = 4.dp),
                 placeholder = { Text("ابحث عن مادة…") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (viewModel.items.isNotEmpty()) {
+                        IconButton(onClick = { clearing = true }) {
+                            Icon(Icons.Default.Delete, contentDescription = "حذف جميع المواد")
+                        }
+                    }
+                },
                 shape = RoundedCornerShape(14.dp),
                 singleLine = true
             )
@@ -198,8 +214,9 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
             if (visible.isEmpty()) {
                 EmptyState(
                     icon = Icons.Default.Search,
-                    title = "لا توجد نتائج",
-                    subtitle = "جرّب كلمة أخرى أو أضف المادة بنفسك.",
+                    title = if (viewModel.items.isEmpty()) "القائمة فارغة" else "لا توجد نتائج",
+                    subtitle = if (viewModel.items.isEmpty()) "أضف مادة أو استورد قائمة من تبويب «صورة»."
+                    else "جرّب كلمة أخرى أو أضف المادة بنفسك.",
                     modifier = Modifier.weight(1f)
                 )
             } else {
@@ -240,7 +257,7 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
         ItemEditorDialog(
             title = "إضافة مادة جديدة",
             initialName = "",
-            initialCategory = if (category == "الكل") "مواد غذائية" else category,
+            initialCategory = if (category == "الكل") "" else category,
             onDismiss = { adding = false },
             onSave = { name, itemCategory ->
                 viewModel.addItem(name, itemCategory)
@@ -258,6 +275,26 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
             onSave = { name, itemCategory ->
                 viewModel.editItem(item.id, name, itemCategory)
                 editing = null
+            }
+        )
+    }
+
+    if (clearing) {
+        AlertDialog(
+            onDismissRequest = { clearing = false },
+            icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+            title = { Text("حذف جميع المواد؟") },
+            text = { Text("سيتم حذف ${viewModel.items.size} مادة من القائمة والسلة نهائيًا.") },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.clearAllItems()
+                    search = ""
+                    category = "الكل"
+                    clearing = false
+                }) { Text("حذف الكل") }
+            },
+            dismissButton = {
+                TextButton(onClick = { clearing = false }) { Text("إلغاء") }
             }
         )
     }
@@ -382,7 +419,8 @@ private fun MasterItemCard(
 @Composable
 private fun CartScreen(viewModel: ShoppingViewModel, modifier: Modifier = Modifier) {
     var filter by remember { mutableStateOf(CartFilter.REMAINING) }
-    var showFinishConfirm by remember { mutableStateOf(false) }
+    var showFinishConfirm by rememberSaveable { mutableStateOf(false) }
+    var showClearPurchasedConfirm by rememberSaveable { mutableStateOf(false) }
 
     val selected = viewModel.items.filter { it.selected }
     val visible = when (filter) {
@@ -473,13 +511,25 @@ private fun CartScreen(viewModel: ShoppingViewModel, modifier: Modifier = Modifi
                 contentPadding = PaddingValues(vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                items(visible, key = { it.id }) { item ->
-                    CartItemCard(
-                        item = item,
-                        onTogglePurchased = { viewModel.togglePurchased(item.id) },
-                        onReturnToList = { viewModel.toggleSelected(item.id) }
-                    )
+                visible.groupBy { it.category }.forEach { (category, group) ->
+                    item(key = "cart-category-$category") { CategoryHeader(category, group.size) }
+                    items(group, key = { it.id }) { item ->
+                        CartItemCard(
+                            item = item,
+                            onTogglePurchased = { viewModel.togglePurchased(item.id) },
+                            onReturnToList = { viewModel.toggleSelected(item.id) }
+                        )
+                    }
                 }
+            }
+        }
+
+        if (viewModel.purchasedCount > 0) {
+            OutlinedButton(
+                onClick = { showClearPurchasedConfirm = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("إزالة المشتريات المنجزة من السلة")
             }
         }
 
@@ -496,6 +546,24 @@ private fun CartScreen(viewModel: ShoppingViewModel, modifier: Modifier = Modifi
             Text("إنهاء التسوق وتجهيز القائمة للمرة القادمة")
         }
         Spacer(Modifier.height(8.dp))
+    }
+
+    if (showClearPurchasedConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearPurchasedConfirm = false },
+            title = { Text("إزالة المشتريات المنجزة؟") },
+            text = { Text("تُزال المواد التي تم شراؤها من السلة، وتبقى أسماؤها في القائمة الأساسية.") },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.clearPurchasedFromCart()
+                    filter = CartFilter.REMAINING
+                    showClearPurchasedConfirm = false
+                }) { Text("إزالة") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearPurchasedConfirm = false }) { Text("إلغاء") }
+            }
+        )
     }
 
     if (showFinishConfirm) {
@@ -630,117 +698,6 @@ private fun CartItemCard(
 }
 
 @Composable
-private fun PhotoScreen(viewModel: ShoppingViewModel, modifier: Modifier = Modifier) {
-    var quickText by remember { mutableStateOf("") }
-
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        item {
-            Surface(
-                color = MaterialTheme.colorScheme.tertiaryContainer,
-                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                shape = RoundedCornerShape(28.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Surface(
-                        modifier = Modifier.size(72.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.tertiary
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.CameraAlt,
-                                contentDescription = null,
-                                modifier = Modifier.size(36.dp),
-                                tint = MaterialTheme.colorScheme.onTertiary
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "صوّر قائمتك الورقية",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "جهزنا مكان الميزة داخل التطبيق. القراءة التلقائية للخط العربي من الصورة ستُفعّل بعد تثبيت النسخة الأساسية والتأكد من عملها.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(17.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("ميزة التصوير: المرحلة التالية", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Edit, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Column {
-                            Text("إدخال سريع الآن", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text(
-                                "اكتب كل مادة في سطر مستقل.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = quickText,
-                        onValueChange = { quickText = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(190.dp),
-                        placeholder = { Text("حليب\nتونة\nسائل غسيل الملابس") },
-                        shape = RoundedCornerShape(18.dp)
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Button(
-                        onClick = {
-                            viewModel.selectImported(quickText.lines())
-                            quickText = ""
-                        },
-                        enabled = quickText.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("إضافة المواد إلى السلة")
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun EmptyState(
     icon: ImageVector,
     title: String,
@@ -788,7 +745,7 @@ private fun ItemEditorDialog(
 ) {
     var name by remember(initialName) { mutableStateOf(initialName) }
     var category by remember(initialCategory) { mutableStateOf(initialCategory) }
-    val quickCategories = listOf("لحوم ومجمدات", "مواد غذائية", "بهارات", "منظفات وعناية", "أخرى")
+    val quickCategories = ShoppingCategories.options
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -808,6 +765,7 @@ private fun ItemEditorDialog(
                     onValueChange = { category = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("التصنيف") },
+                    placeholder = { Text(ShoppingCategories.forName(name)) },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp)
                 )
@@ -829,8 +787,8 @@ private fun ItemEditorDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onSave(name.trim(), category.trim()) },
-                enabled = name.isNotBlank() && category.isNotBlank()
+                onClick = { onSave(name.trim(), category.trim().ifBlank { ShoppingCategories.forName(name) }) },
+                enabled = name.isNotBlank()
             ) { Text("حفظ") }
         },
         dismissButton = {
@@ -842,7 +800,7 @@ private fun ItemEditorDialog(
 private fun categoryIcon(category: String): ImageVector = when (category) {
     "لحوم ومجمدات" -> Icons.Default.Kitchen
     "بهارات" -> Icons.Default.Restaurant
-    "منظفات وعناية" -> Icons.Default.CleaningServices
+    ShoppingCategories.CLEANING, ShoppingCategories.CARE, "منظفات وعناية" -> Icons.Default.CleaningServices
     "الكل" -> Icons.Default.List
     else -> Icons.Default.LocalGroceryStore
 }

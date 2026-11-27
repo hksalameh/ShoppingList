@@ -13,7 +13,8 @@ data class ShoppingItem(
     val name: String,
     val category: String,
     val selected: Boolean = false,
-    val purchased: Boolean = false
+    val purchased: Boolean = false,
+    val quantity: String = ""
 )
 
 class ShoppingViewModel(application: Application) : AndroidViewModel(application) {
@@ -22,7 +23,13 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
     val items = mutableStateListOf<ShoppingItem>()
 
     init {
-        items.addAll(loadItems())
+        val stored = loadItems()
+        val migrated = stored.map { item ->
+            val category = ShoppingCategories.fromStored(item.name, item.category)
+            if (category == item.category) item else item.copy(category = category)
+        }
+        items.addAll(migrated)
+        if (migrated != stored) persist()
     }
 
     val selectedCount: Int
@@ -37,7 +44,11 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
     fun toggleSelected(id: String) {
         update(id) { item ->
             val nextSelected = !item.selected
-            item.copy(selected = nextSelected, purchased = if (nextSelected) false else item.purchased)
+            item.copy(
+                selected = nextSelected,
+                purchased = if (nextSelected) false else item.purchased,
+                quantity = if (nextSelected) item.quantity else ""
+            )
         }
     }
 
@@ -69,37 +80,64 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
         persist()
     }
 
-    fun finishShopping() {
+    fun clearAllItems() {
+        items.clear()
+        persist()
+    }
+
+    fun clearPurchasedFromCart() {
         for (index in items.indices) {
             val item = items[index]
-            if (item.selected || item.purchased) {
-                items[index] = item.copy(selected = false, purchased = false)
+            if (item.selected && item.purchased) {
+                items[index] = item.copy(selected = false, purchased = false, quantity = "")
             }
         }
         persist()
     }
 
-    fun selectImported(names: List<String>) {
-        names.map { it.trim() }
-            .filter { it.isNotBlank() }
-            .forEach { importedName ->
-                val existingIndex = items.indexOfFirst { it.name == importedName }
-                if (existingIndex >= 0) {
-                    val existing = items[existingIndex]
-                    items[existingIndex] = existing.copy(selected = true, purchased = false)
-                } else {
-                    items.add(
-                        ShoppingItem(
-                            id = UUID.randomUUID().toString(),
-                            name = importedName,
-                            category = "من صورة",
-                            selected = true,
-                            purchased = false
-                        )
-                    )
-                }
+    fun finishShopping() {
+        for (index in items.indices) {
+            val item = items[index]
+            if (item.selected || item.purchased) {
+                items[index] = item.copy(selected = false, purchased = false, quantity = "")
             }
+        }
         persist()
+    }
+
+    internal fun selectImported(rows: List<ImportItem>): Int {
+        var pending = 0
+        for (row in uniqueImportItems(rows)) {
+            val key = itemKey(row.name)
+            // Prefer an existing cart item if an older list already contains duplicates.
+            val existingIndex = items.indexOfFirst { it.selected && !it.purchased && itemKey(it.name) == key }
+                .takeIf { it >= 0 }
+                ?: items.indexOfFirst { it.selected && itemKey(it.name) == key }.takeIf { it >= 0 }
+                ?: items.indexOfFirst { itemKey(it.name) == key }
+            if (existingIndex >= 0) {
+                val existing = items[existingIndex]
+                if (existing.selected && existing.purchased) continue
+                items[existingIndex] = existing.copy(
+                    selected = true,
+                    purchased = false,
+                    quantity = row.quantity.ifBlank { existing.quantity },
+                    category = row.category ?: existing.category
+                )
+            } else {
+                items.add(
+                    ShoppingItem(
+                        id = UUID.randomUUID().toString(),
+                        name = row.name,
+                        category = row.effectiveCategory,
+                        selected = true,
+                        quantity = row.quantity
+                    )
+                )
+            }
+            pending++
+        }
+        if (pending > 0) persist()
+        return pending
     }
 
     private fun update(id: String, transform: (ShoppingItem) -> ShoppingItem) {
@@ -119,13 +157,14 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                     .put("category", item.category)
                     .put("selected", item.selected)
                     .put("purchased", item.purchased)
+                    .put("quantity", item.quantity)
             )
         }
         prefs.edit().putString("items", json.toString()).apply()
     }
 
     private fun loadItems(): List<ShoppingItem> {
-        val raw = prefs.getString("items", null) ?: return defaultItems()
+        val raw = prefs.getString("items", null) ?: return emptyList()
         return runCatching {
             val array = JSONArray(raw)
             buildList {
@@ -137,43 +176,13 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                             name = obj.getString("name"),
                             category = obj.optString("category", "أخرى"),
                             selected = obj.optBoolean("selected", false),
-                            purchased = obj.optBoolean("purchased", false)
+                            purchased = obj.optBoolean("purchased", false),
+                            quantity = obj.optString("quantity", "")
                         )
                     )
                 }
             }
-        }.getOrElse { defaultItems() }
+        }.getOrElse { emptyList() }
     }
 
-    private fun defaultItems(): List<ShoppingItem> {
-        val groups = linkedMapOf(
-            "لحوم ومجمدات" to listOf(
-                "دجاج", "لحمة", "زنجر", "سمك", "لبنة تركية", "بيض",
-                "جبنة موزاريلا", "بازيلا معلبة", "زبدة", "زيتون"
-            ),
-            "مواد غذائية" to listOf(
-                "رز عادي", "رز بسمتي", "حليب", "قهوة", "عسل", "مكرونة أشكال",
-                "جميد", "فستق", "زبيب", "فطر", "قشطة", "تونة", "ساردين",
-                "مية بندورة", "فول أبيض"
-            ),
-            "بهارات" to listOf(
-                "هيل", "كمون", "فلفل أسود", "ملح", "البهارات السبعة"
-            ),
-            "منظفات وعناية" to listOf(
-                "سائل غسيل الملابس", "سائل جلي", "شامبو للشعر والجسم",
-                "محارم عادية", "محارم مطبخ", "محارم حمام", "مشمعات سفرة",
-                "قصدير", "ورق تغليف الطعام", "كلور", "معطر", "فوط نسائية", "مزيل عرق"
-            )
-        )
-
-        return groups.flatMap { (category, names) ->
-            names.mapIndexed { index, name ->
-                ShoppingItem(
-                    id = "seed-${category.hashCode()}-$index",
-                    name = name,
-                    category = category
-                )
-            }
-        }
-    }
 }
