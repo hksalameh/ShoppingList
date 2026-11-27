@@ -21,13 +21,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Kitchen
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.LocalGroceryStore
@@ -59,9 +57,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,8 +75,13 @@ enum class CartFilter { REMAINING, ALL, PURCHASED }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ShoppingApp(viewModel: ShoppingViewModel) {
-    var page by remember { mutableStateOf(AppPage.LIST) }
+internal fun ShoppingApp(viewModel: ShoppingViewModel, photoImport: PhotoImportViewModel) {
+    var page by rememberSaveable { mutableStateOf(AppPage.LIST) }
+    var lastShare by rememberSaveable { mutableStateOf(0) }
+    LaunchedEffect(photoImport.shareRequest) {
+        if (photoImport.shareRequest > lastShare) page = AppPage.PHOTO
+        lastShare = photoImport.shareRequest
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -141,7 +146,10 @@ fun ShoppingApp(viewModel: ShoppingViewModel) {
         when (page) {
             AppPage.LIST -> MasterListScreen(viewModel, Modifier.padding(padding))
             AppPage.CART -> CartScreen(viewModel, Modifier.padding(padding))
-            AppPage.PHOTO -> PhotoScreen(viewModel, Modifier.padding(padding))
+            AppPage.PHOTO -> PhotoScreen(
+                viewModel, photoImport, Modifier.padding(padding),
+                onOpenCart = { page = AppPage.CART }
+            )
         }
     }
 }
@@ -624,117 +632,6 @@ private fun CartItemCard(
                 )
                 Spacer(Modifier.width(4.dp))
                 Text("إرجاع")
-            }
-        }
-    }
-}
-
-@Composable
-private fun PhotoScreen(viewModel: ShoppingViewModel, modifier: Modifier = Modifier) {
-    var quickText by remember { mutableStateOf("") }
-
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        item {
-            Surface(
-                color = MaterialTheme.colorScheme.tertiaryContainer,
-                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                shape = RoundedCornerShape(28.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Surface(
-                        modifier = Modifier.size(72.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.tertiary
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.CameraAlt,
-                                contentDescription = null,
-                                modifier = Modifier.size(36.dp),
-                                tint = MaterialTheme.colorScheme.onTertiary
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "صوّر قائمتك الورقية",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "جهزنا مكان الميزة داخل التطبيق. القراءة التلقائية للخط العربي من الصورة ستُفعّل بعد تثبيت النسخة الأساسية والتأكد من عملها.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(17.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("ميزة التصوير: المرحلة التالية", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Edit, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Column {
-                            Text("إدخال سريع الآن", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text(
-                                "اكتب كل مادة في سطر مستقل.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = quickText,
-                        onValueChange = { quickText = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(190.dp),
-                        placeholder = { Text("حليب\nتونة\nسائل غسيل الملابس") },
-                        shape = RoundedCornerShape(18.dp)
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Button(
-                        onClick = {
-                            viewModel.selectImported(quickText.lines())
-                            quickText = ""
-                        },
-                        enabled = quickText.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("إضافة المواد إلى السلة")
-                    }
-                }
             }
         }
     }

@@ -13,7 +13,8 @@ data class ShoppingItem(
     val name: String,
     val category: String,
     val selected: Boolean = false,
-    val purchased: Boolean = false
+    val purchased: Boolean = false,
+    val quantity: String = ""
 )
 
 class ShoppingViewModel(application: Application) : AndroidViewModel(application) {
@@ -37,7 +38,11 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
     fun toggleSelected(id: String) {
         update(id) { item ->
             val nextSelected = !item.selected
-            item.copy(selected = nextSelected, purchased = if (nextSelected) false else item.purchased)
+            item.copy(
+                selected = nextSelected,
+                purchased = if (nextSelected) false else item.purchased,
+                quantity = if (nextSelected) item.quantity else ""
+            )
         }
     }
 
@@ -73,33 +78,44 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
         for (index in items.indices) {
             val item = items[index]
             if (item.selected || item.purchased) {
-                items[index] = item.copy(selected = false, purchased = false)
+                items[index] = item.copy(selected = false, purchased = false, quantity = "")
             }
         }
         persist()
     }
 
-    fun selectImported(names: List<String>) {
-        names.map { it.trim() }
-            .filter { it.isNotBlank() }
-            .forEach { importedName ->
-                val existingIndex = items.indexOfFirst { it.name == importedName }
-                if (existingIndex >= 0) {
-                    val existing = items[existingIndex]
-                    items[existingIndex] = existing.copy(selected = true, purchased = false)
-                } else {
-                    items.add(
-                        ShoppingItem(
-                            id = UUID.randomUUID().toString(),
-                            name = importedName,
-                            category = "من صورة",
-                            selected = true,
-                            purchased = false
-                        )
+    internal fun selectImported(rows: List<ImportItem>): Int {
+        var pending = 0
+        for (row in uniqueImportItems(rows)) {
+            val key = itemKey(row.name)
+            // Prefer an existing cart item if an older list already contains duplicates.
+            val existingIndex = items.indexOfFirst { it.selected && !it.purchased && itemKey(it.name) == key }
+                .takeIf { it >= 0 }
+                ?: items.indexOfFirst { it.selected && itemKey(it.name) == key }.takeIf { it >= 0 }
+                ?: items.indexOfFirst { itemKey(it.name) == key }
+            if (existingIndex >= 0) {
+                val existing = items[existingIndex]
+                if (existing.selected && existing.purchased) continue
+                items[existingIndex] = existing.copy(
+                    selected = true,
+                    purchased = false,
+                    quantity = row.quantity.ifBlank { existing.quantity }
+                )
+            } else {
+                items.add(
+                    ShoppingItem(
+                        id = UUID.randomUUID().toString(),
+                        name = row.name,
+                        category = "من صورة",
+                        selected = true,
+                        quantity = row.quantity
                     )
-                }
+                )
             }
-        persist()
+            pending++
+        }
+        if (pending > 0) persist()
+        return pending
     }
 
     private fun update(id: String, transform: (ShoppingItem) -> ShoppingItem) {
@@ -119,6 +135,7 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                     .put("category", item.category)
                     .put("selected", item.selected)
                     .put("purchased", item.purchased)
+                    .put("quantity", item.quantity)
             )
         }
         prefs.edit().putString("items", json.toString()).apply()
@@ -137,7 +154,8 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                             name = obj.getString("name"),
                             category = obj.optString("category", "أخرى"),
                             selected = obj.optBoolean("selected", false),
-                            purchased = obj.optBoolean("purchased", false)
+                            purchased = obj.optBoolean("purchased", false),
+                            quantity = obj.optString("quantity", "")
                         )
                     )
                 }

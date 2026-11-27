@@ -1,0 +1,9 @@
+The bundled text detection and Arabic recognition models are ONNX exports of
+PaddleOCR PP-OCRv5 Mobile, distributed under the Apache License, Version 2.0.
+
+Original models:
+https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det
+https://huggingface.co/PaddlePaddle/arabic_PP-OCRv5_mobile_rec
+
+ONNX exports and dictionary:
+https://huggingface.co/vladadu/pp-ocrv5-arabic-mobile-onnx/tree/047899f6baac72fb983dfe29122d946bc14f7426
