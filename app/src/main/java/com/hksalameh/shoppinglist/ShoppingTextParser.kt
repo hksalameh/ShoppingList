@@ -3,7 +3,9 @@ package com.hksalameh.shoppinglist
 import java.text.Normalizer
 import java.util.Locale
 
-internal data class ImportItem(val name: String, val quantity: String = "")
+internal data class ImportItem(val name: String, val quantity: String = "", val category: String? = null) {
+    val effectiveCategory: String get() = category ?: ShoppingCategories.forName(name)
+}
 
 private val formatting = Regex("[\\p{Cf}]")
 private val spaces = Regex("[\\p{Z}\\s]+")
@@ -69,14 +71,17 @@ private fun parseLine(raw: String): ImportItem? {
 internal fun uniqueImportItems(rows: List<ImportItem>): List<ImportItem> {
     val unique = linkedMapOf<String, ImportItem>()
     for (row in rows) {
-        val item = ImportItem(row.name.trim(), row.quantity.trim())
+        val item = row.copy(name = row.name.trim(), quantity = row.quantity.trim())
         val key = itemKey(item.name)
         if (key.isBlank()) continue
         val earlier = unique[key]
         if (earlier == null) {
             unique[key] = item
-        } else if (earlier.quantity.isBlank()) {
-            unique[key] = earlier.copy(quantity = item.quantity)
+        } else {
+            unique[key] = earlier.copy(
+                quantity = earlier.quantity.ifBlank { item.quantity },
+                category = earlier.category ?: item.category
+            )
         }
     }
     return unique.values.toList()

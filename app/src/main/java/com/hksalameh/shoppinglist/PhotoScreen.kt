@@ -6,6 +6,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -22,6 +23,8 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,6 +38,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -61,6 +65,9 @@ internal fun PhotoScreen(
     var quickText by rememberSaveable { mutableStateOf("") }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) photo.scan(listOf(uri))
+    }
+    val textFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) photo.reviewText(uri)
     }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
         val file = cameraFileName?.let { File(cameraDirectory, it) }
@@ -134,6 +141,11 @@ internal fun PhotoScreen(
                             Text("المعرض", Modifier.padding(start = 6.dp))
                         }
                     }
+                    OutlinedButton(
+                        onClick = { textFile.launch(arrayOf("text/plain")) },
+                        enabled = !photo.busy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("استيراد ملف TXT") }
                     if (photo.busy) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text("جاري قراءة الصور على الجهاز…")
@@ -195,6 +207,24 @@ internal fun PhotoScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
+                        var categoriesOpen by remember { mutableStateOf(false) }
+                        Box {
+                            TextButton(onClick = { categoriesOpen = true }) {
+                                Text("التصنيف: ${row.item.effectiveCategory}")
+                            }
+                            DropdownMenu(expanded = categoriesOpen, onDismissRequest = { categoriesOpen = false }) {
+                                DropdownMenuItem(text = { Text("تلقائي") }, onClick = {
+                                    photo.edit(row.id, row.item.copy(category = null))
+                                    categoriesOpen = false
+                                })
+                                ShoppingCategories.options.forEach { category ->
+                                    DropdownMenuItem(text = { Text(category) }, onClick = {
+                                        photo.edit(row.id, row.item.copy(category = category))
+                                        categoriesOpen = false
+                                    })
+                                }
+                            }
+                        }
                         row.suggestion?.let { suggestion ->
                             TextButton(onClick = { photo.edit(row.id, row.item.copy(name = suggestion)) }) {
                                 Text("اقتراح: $suggestion")

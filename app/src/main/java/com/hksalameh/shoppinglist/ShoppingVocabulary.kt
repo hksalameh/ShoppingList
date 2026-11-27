@@ -3,6 +3,14 @@ package com.hksalameh.shoppinglist
 internal class ShoppingVocabulary(knownNames: List<String>) {
     private val names = (commonNames + knownNames).associateBy(::matchingKey)
 
+    fun spellings(): List<ShoppingSpelling> = names.values.flatMap { label ->
+        val variants = listOf(label) + aliases[label].orEmpty()
+        variants.flatMap { variant ->
+            val plain = itemKey(variant)
+            listOf(variant, plain, variant.replace('ة', 'ه'), plain.replace('ة', 'ه'))
+        }.distinct().map { ShoppingSpelling(label, it) }
+    }
+
     fun isExact(name: String): Boolean = matchingKey(name) in names
 
     fun suggest(name: String): String? {
@@ -49,6 +57,17 @@ internal class ShoppingVocabulary(knownNames: List<String>) {
     }
 
     private companion object {
+        val aliases = mapOf(
+            "تونة" to listOf("طون", "تون", "تونا"),
+            "مكرونة أشكال" to listOf("معكرونه اشكال", "معكرونة أشكال"),
+            "ذرة" to listOf("دره"),
+            "فستق" to listOf("فزدق"),
+            "كتشب" to listOf("كاتشب", "كتش اب"),
+            "البهارات السبعة" to listOf("بهارات سبعة", "بهارات ٧", "بهارات 7"),
+            "جبنة مثلثة" to listOf("جبنة مثلثات"),
+            "سائل جلي" to listOf("دوا جلي", "سائل للجلي")
+        )
+
         val commonNames = listOf(
             "دجاج", "لحمة", "زنجر", "سمك", "لبنة", "بيض", "جبنة موزاريلا", "جبنة مثلثة",
             "بازيلا معلبة", "بازيلا مجمدة", "زبدة", "زيتون", "زيت زيتون", "سمنة بلدية",
@@ -58,7 +77,12 @@ internal class ShoppingVocabulary(knownNames: List<String>) {
             "هيل", "كمون", "فلفل أسود", "ملح", "البهارات السبعة",
             "سائل غسيل الملابس", "سائل جلي", "شامبو", "محارم عادية", "محارم مطبخ",
             "محارم حمام", "مشمعات سفرة", "قصدير", "ورق تغليف الطعام", "كلور",
-            "معطر", "فوط نسائية", "مزيل عرق", "معجون أسنان", "فرشاة أسنان", "جل للحمام"
+            "معطر", "فوط نسائية", "مزيل عرق", "معجون أسنان", "فرشاة أسنان", "جل للحمام",
+            "جوز الهند", "نسكافيه", "كتشب", "باربيكيو صوص", "محارم مبللة", "ليف للجلي",
+            "بودرة للجسم", "ليفة للاستحمام", "بهارات منسف", "بهارات دجاج", "بهارات لحمة",
+            "بودرة غسيل", "سائل غسيل", "معطر ملابس", "منظف أرضيات", "صابون", "معقم",
+            "مخلل", "طحينة", "سماق", "بابريكا", "قرفة", "شوفان", "خبز", "طحين", "شاي",
+            "سكر", "بطاطا", "بصل", "بندورة", "خيار", "تفاح", "برتقال", "موز"
         )
     }
 }

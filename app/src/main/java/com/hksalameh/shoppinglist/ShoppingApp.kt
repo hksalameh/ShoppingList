@@ -257,7 +257,7 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
         ItemEditorDialog(
             title = "إضافة مادة جديدة",
             initialName = "",
-            initialCategory = if (category == "الكل") "مواد غذائية" else category,
+            initialCategory = if (category == "الكل") "" else category,
             onDismiss = { adding = false },
             onSave = { name, itemCategory ->
                 viewModel.addItem(name, itemCategory)
@@ -511,12 +511,15 @@ private fun CartScreen(viewModel: ShoppingViewModel, modifier: Modifier = Modifi
                 contentPadding = PaddingValues(vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                items(visible, key = { it.id }) { item ->
-                    CartItemCard(
-                        item = item,
-                        onTogglePurchased = { viewModel.togglePurchased(item.id) },
-                        onReturnToList = { viewModel.toggleSelected(item.id) }
-                    )
+                visible.groupBy { it.category }.forEach { (category, group) ->
+                    item(key = "cart-category-$category") { CategoryHeader(category, group.size) }
+                    items(group, key = { it.id }) { item ->
+                        CartItemCard(
+                            item = item,
+                            onTogglePurchased = { viewModel.togglePurchased(item.id) },
+                            onReturnToList = { viewModel.toggleSelected(item.id) }
+                        )
+                    }
                 }
             }
         }
@@ -742,7 +745,7 @@ private fun ItemEditorDialog(
 ) {
     var name by remember(initialName) { mutableStateOf(initialName) }
     var category by remember(initialCategory) { mutableStateOf(initialCategory) }
-    val quickCategories = listOf("لحوم ومجمدات", "مواد غذائية", "بهارات", "منظفات وعناية", "أخرى")
+    val quickCategories = ShoppingCategories.options
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -762,6 +765,7 @@ private fun ItemEditorDialog(
                     onValueChange = { category = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("التصنيف") },
+                    placeholder = { Text(ShoppingCategories.forName(name)) },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp)
                 )
@@ -783,8 +787,8 @@ private fun ItemEditorDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onSave(name.trim(), category.trim()) },
-                enabled = name.isNotBlank() && category.isNotBlank()
+                onClick = { onSave(name.trim(), category.trim().ifBlank { ShoppingCategories.forName(name) }) },
+                enabled = name.isNotBlank()
             ) { Text("حفظ") }
         },
         dismissButton = {
@@ -796,7 +800,7 @@ private fun ItemEditorDialog(
 private fun categoryIcon(category: String): ImageVector = when (category) {
     "لحوم ومجمدات" -> Icons.Default.Kitchen
     "بهارات" -> Icons.Default.Restaurant
-    "منظفات وعناية" -> Icons.Default.CleaningServices
+    ShoppingCategories.CLEANING, ShoppingCategories.CARE, "منظفات وعناية" -> Icons.Default.CleaningServices
     "الكل" -> Icons.Default.List
     else -> Icons.Default.LocalGroceryStore
 }

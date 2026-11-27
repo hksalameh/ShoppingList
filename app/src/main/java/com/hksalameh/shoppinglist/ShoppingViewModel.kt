@@ -23,7 +23,13 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
     val items = mutableStateListOf<ShoppingItem>()
 
     init {
-        items.addAll(loadItems())
+        val stored = loadItems()
+        val migrated = stored.map { item ->
+            val category = ShoppingCategories.fromStored(item.name, item.category)
+            if (category == item.category) item else item.copy(category = category)
+        }
+        items.addAll(migrated)
+        if (migrated != stored) persist()
     }
 
     val selectedCount: Int
@@ -114,14 +120,15 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                 items[existingIndex] = existing.copy(
                     selected = true,
                     purchased = false,
-                    quantity = row.quantity.ifBlank { existing.quantity }
+                    quantity = row.quantity.ifBlank { existing.quantity },
+                    category = row.category ?: existing.category
                 )
             } else {
                 items.add(
                     ShoppingItem(
                         id = UUID.randomUUID().toString(),
                         name = row.name,
-                        category = "من صورة",
+                        category = row.effectiveCategory,
                         selected = true,
                         quantity = row.quantity
                     )

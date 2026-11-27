@@ -13,7 +13,6 @@ import kotlin.math.roundToInt
 internal data class ScannedItem(val item: ImportItem, val image: Bitmap, val suggestion: String?)
 internal data class PhotoOcrResult(val items: List<ScannedItem>, val unreadable: Int)
 
-private data class RecognizedLine(val text: String, val confidence: Float)
 
 internal class PhotoOcr(private val context: Context) {
     private val imageReader = PhotoImage(context)
@@ -25,6 +24,7 @@ internal class PhotoOcr(private val context: Context) {
         }
         val rows = mutableListOf<ScannedItem>()
         val vocabulary = ShoppingVocabulary(knownNames)
+        val catalog = ShoppingCtc(dictionary, vocabulary.spellings())
         var unreadable = 0
         OrtSession.SessionOptions().use { options ->
             options.setIntraOpNumThreads(2)
@@ -38,7 +38,7 @@ internal class PhotoOcr(private val context: Context) {
                             null
                         }
                         val parsed = if (bitmap == null) emptyList() else try {
-                            recognizePage(runtime, detector, recognizer, dictionary, vocabulary, bitmap)
+                            recognizePage(runtime, detector, recognizer, dictionary, vocabulary, catalog, bitmap)
                         } finally {
                             bitmap.recycle()
                         }
@@ -57,37 +57,19 @@ internal class PhotoOcr(private val context: Context) {
         recognizer: OrtSession,
         dictionary: List<String>,
         vocabulary: ShoppingVocabulary,
+        catalog: ShoppingCtc,
         photo: Bitmap
     ): List<ScannedItem> {
         val ink = extractBlueInk(photo)
         return try {
             val lines = detectRows(runtime, detector, ink ?: photo)
             lines.mapNotNull { row ->
-                val candidates = listOfNotNull(
-                    readRow(runtime, recognizer, dictionary, photo, row),
-                    ink?.let { readRow(runtime, recognizer, dictionary, it, row) }
-                ).mapNotNull candidate@ { result ->
-                    val text = result.text
-                    val item = parseShoppingText(text).singleOrNull() ?: return@candidate null
-                    if (ink != null && text.count { it.isLetter() && Character.UnicodeScript.of(it.code) == Character.UnicodeScript.ARABIC } < 2) {
-                        return@candidate null
-                    }
-                    item to result.confidence
-                }
-                val best = candidates.map { (item, confidence) ->
-                    val suggestion = vocabulary.suggest(item.name)
-                    val match = when {
-                        confidence < 0.45f -> 0f
-                        vocabulary.isExact(item.name) -> 0.30f
-                        suggestion != null -> 0.12f
-                        else -> 0f
-                    }
-                    val mixedScript = ink != null && item.name.any { it in 'A'..'Z' || it in 'a'..'z' }
-                    val score = confidence + match - if (mixedScript) 0.10f else 0f
-                    Triple(item, suggestion, score)
-                }.maxByOrNull { it.third }
-                if (best == null && ink == null) return@mapNotNull null
-                ScannedItem(best?.first ?: ImportItem(""), thumbnail(photo, row), best?.second)
+                val reads = listOfNotNull(
+                    readRow(runtime, recognizer, dictionary, photo, row, catalog.takeIf { ink != null }),
+                    ink?.let { readRow(runtime, recognizer, dictionary, it, row, catalog) }
+                )
+                val reviewed = resolveShoppingOcr(reads, vocabulary, handwriting = ink != null) ?: return@mapNotNull null
+                ScannedItem(reviewed.item, thumbnail(photo, row), reviewed.suggestion)
             }
         } finally {
             ink?.recycle()
@@ -181,7 +163,8 @@ internal class PhotoOcr(private val context: Context) {
         recognizer: OrtSession,
         dictionary: List<String>,
         photo: Bitmap,
-        row: PhotoRegion
+        row: PhotoRegion,
+        catalog: ShoppingCtc?
     ): RecognizedLine {
         val crop = crop(photo, row)
         val width = (LINE_HEIGHT.toFloat() * crop.width / crop.height).roundToInt().coerceIn(12, 960)
@@ -195,7 +178,9 @@ internal class PhotoOcr(private val context: Context) {
                     val steps = shape[1].toInt()
                     val classes = shape[2].toInt()
                     check(classes == dictionary.size)
-                    val probabilities = output.floatBuffer
+                    val probabilities = FloatArray(steps * classes)
+                    output.floatBuffer.get(probabilities)
+                    var offset = 0
                     var confidence = 0f
                     var characters = 0
                     val visual = buildString {
@@ -204,7 +189,7 @@ internal class PhotoOcr(private val context: Context) {
                             var index = 0
                             var best = Float.NEGATIVE_INFINITY
                             repeat(classes) { candidate ->
-                                val score = probabilities.get()
+                                val score = probabilities[offset++]
                                 if (score > best) {
                                     best = score
                                     index = candidate
@@ -218,7 +203,12 @@ internal class PhotoOcr(private val context: Context) {
                             last = index
                         }
                     }
-                    RecognizedLine(logicalArabicText(visual), confidence / characters.coerceAtLeast(1))
+                    val text = logicalArabicText(visual)
+                    RecognizedLine(
+                        text,
+                        confidence / characters.coerceAtLeast(1),
+                        catalog?.match(probabilities, text.length)
+                    )
                 }
             }
         } finally {

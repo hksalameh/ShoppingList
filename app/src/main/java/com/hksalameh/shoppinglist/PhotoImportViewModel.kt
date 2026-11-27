@@ -75,6 +75,44 @@ internal class PhotoImportViewModel(application: Application) : AndroidViewModel
         }
     }
 
+    fun reviewText(uri: Uri) {
+        if (busy) return
+        busy = true
+        message = null
+        viewModelScope.launch {
+            try {
+                val text = withContext(Dispatchers.IO) {
+                    val resolver = getApplication<Application>().contentResolver
+                    checkNotNull(resolver.openInputStream(uri)).bufferedReader(Charsets.UTF_8).use { reader ->
+                        val buffer = CharArray(65_537)
+                        val count = reader.readNCharsCompat(buffer)
+                        check(count < buffer.size)
+                        String(buffer, 0, count).removePrefix("\uFEFF")
+                    }
+                }
+                val rows = parseShoppingText(text)
+                for (item in rows) draft.add(ImportDraftRow(nextRowId++, item))
+                if (rows.isEmpty()) message = "الملف لا يحتوي على مواد قابلة للاستيراد."
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                message = "تعذّر فتح الملف. اختر ملف TXT بترميز UTF-8."
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    private fun java.io.Reader.readNCharsCompat(buffer: CharArray): Int {
+        var total = 0
+        while (total < buffer.size) {
+            val count = read(buffer, total, buffer.size - total)
+            if (count == -1) break
+            total += count
+        }
+        return total
+    }
+
     fun edit(id: Int, item: ImportItem) {
         val index = draft.indexOfFirst { it.id == id }
         if (index >= 0) {
