@@ -1,6 +1,7 @@
 package com.hksalameh.shoppinglist
 
 import android.app.Application
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -14,9 +15,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-internal data class ImportDraftRow(val id: Int, val item: ImportItem)
+internal data class ImportDraftRow(
+    val id: Int, val item: ImportItem, val image: Bitmap? = null, val suggestion: String? = null
+)
 
 internal class PhotoImportViewModel(application: Application) : AndroidViewModel(application) {
+    var knownNames: () -> List<String> = { emptyList() }
     private val ocr = PhotoOcr(application)
     private var nextRowId = 0
     private val draft = mutableStateListOf<ImportDraftRow>()
@@ -48,8 +52,11 @@ internal class PhotoImportViewModel(application: Application) : AndroidViewModel
         message = null
         viewModelScope.launch {
             try {
-                val result = withContext(Dispatchers.IO) { ocr.recognize(uris) }
-                for (item in result.items) draft.add(ImportDraftRow(nextRowId++, item))
+                val vocabulary = knownNames()
+                val result = withContext(Dispatchers.IO) { ocr.recognize(uris, vocabulary) }
+                for (scan in result.items) {
+                    draft.add(ImportDraftRow(nextRowId++, scan.item, scan.image, scan.suggestion))
+                }
                 message = when {
                     result.items.isEmpty() -> "تعذّرت قراءة المواد. جرّب صورة أوضح أو استخدم الإدخال السريع."
                     result.unreadable > 0 -> "تعذّرت قراءة بعض الصور. راجع المواد المستخرجة."
@@ -70,7 +77,12 @@ internal class PhotoImportViewModel(application: Application) : AndroidViewModel
 
     fun edit(id: Int, item: ImportItem) {
         val index = draft.indexOfFirst { it.id == id }
-        if (index >= 0) draft[index] = ImportDraftRow(id, item)
+        if (index >= 0) {
+            val previous = draft[index]
+            draft[index] = previous.copy(item = item, suggestion = previous.suggestion.takeIf {
+                previous.item.name == item.name
+            })
+        }
     }
 
     fun addRow() {

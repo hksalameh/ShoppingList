@@ -17,6 +17,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val viewModel = ViewModelProvider(this)[ShoppingViewModel::class.java]
+        photoImport.knownNames = { viewModel.items.map { it.name } }
         if (savedInstanceState == null) handleSharedImage(intent)
 
         setContent {

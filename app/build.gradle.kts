@@ -17,16 +17,16 @@ android {
         applicationId = "com.hksalameh.shoppinglist"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.3.1"
         manifestPlaceholders["appLabel"] = "مشترياتي"
     }
 
     buildTypes {
         create("preview") {
             initWith(getByName("debug"))
-            applicationIdSuffix = ".preview"
-            manifestPlaceholders["appLabel"] = "مشترياتي (تجريبي)"
+            applicationIdSuffix = ".preview2"
+            manifestPlaceholders["appLabel"] = "مشترياتي (نسخة الصور)"
             ndk.abiFilters += setOf("arm64-v8a")
             matchingFallbacks += listOf("debug")
         }

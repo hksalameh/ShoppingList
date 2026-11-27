@@ -161,6 +161,7 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
     var editing by remember { mutableStateOf<ShoppingItem?>(null) }
     var adding by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<ShoppingItem?>(null) }
+    var clearing by rememberSaveable { mutableStateOf(false) }
 
     val categories = listOf("الكل") + viewModel.items.map { it.category }.distinct()
     val visible = viewModel.items.filter {
@@ -179,6 +180,13 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
                     .padding(horizontal = 12.dp, vertical = 4.dp),
                 placeholder = { Text("ابحث عن مادة…") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (viewModel.items.isNotEmpty()) {
+                        IconButton(onClick = { clearing = true }) {
+                            Icon(Icons.Default.Delete, contentDescription = "حذف جميع المواد")
+                        }
+                    }
+                },
                 shape = RoundedCornerShape(14.dp),
                 singleLine = true
             )
@@ -206,8 +214,9 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
             if (visible.isEmpty()) {
                 EmptyState(
                     icon = Icons.Default.Search,
-                    title = "لا توجد نتائج",
-                    subtitle = "جرّب كلمة أخرى أو أضف المادة بنفسك.",
+                    title = if (viewModel.items.isEmpty()) "القائمة فارغة" else "لا توجد نتائج",
+                    subtitle = if (viewModel.items.isEmpty()) "أضف مادة أو استورد قائمة من تبويب «صورة»."
+                    else "جرّب كلمة أخرى أو أضف المادة بنفسك.",
                     modifier = Modifier.weight(1f)
                 )
             } else {
@@ -266,6 +275,26 @@ private fun MasterListScreen(viewModel: ShoppingViewModel, modifier: Modifier = 
             onSave = { name, itemCategory ->
                 viewModel.editItem(item.id, name, itemCategory)
                 editing = null
+            }
+        )
+    }
+
+    if (clearing) {
+        AlertDialog(
+            onDismissRequest = { clearing = false },
+            icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+            title = { Text("حذف جميع المواد؟") },
+            text = { Text("سيتم حذف ${viewModel.items.size} مادة من القائمة والسلة نهائيًا.") },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.clearAllItems()
+                    search = ""
+                    category = "الكل"
+                    clearing = false
+                }) { Text("حذف الكل") }
+            },
+            dismissButton = {
+                TextButton(onClick = { clearing = false }) { Text("إلغاء") }
             }
         )
     }
@@ -390,7 +419,8 @@ private fun MasterItemCard(
 @Composable
 private fun CartScreen(viewModel: ShoppingViewModel, modifier: Modifier = Modifier) {
     var filter by remember { mutableStateOf(CartFilter.REMAINING) }
-    var showFinishConfirm by remember { mutableStateOf(false) }
+    var showFinishConfirm by rememberSaveable { mutableStateOf(false) }
+    var showClearPurchasedConfirm by rememberSaveable { mutableStateOf(false) }
 
     val selected = viewModel.items.filter { it.selected }
     val visible = when (filter) {
@@ -491,6 +521,15 @@ private fun CartScreen(viewModel: ShoppingViewModel, modifier: Modifier = Modifi
             }
         }
 
+        if (viewModel.purchasedCount > 0) {
+            OutlinedButton(
+                onClick = { showClearPurchasedConfirm = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("إزالة المشتريات المنجزة من السلة")
+            }
+        }
+
         Button(
             onClick = { showFinishConfirm = true },
             modifier = Modifier
@@ -504,6 +543,24 @@ private fun CartScreen(viewModel: ShoppingViewModel, modifier: Modifier = Modifi
             Text("إنهاء التسوق وتجهيز القائمة للمرة القادمة")
         }
         Spacer(Modifier.height(8.dp))
+    }
+
+    if (showClearPurchasedConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearPurchasedConfirm = false },
+            title = { Text("إزالة المشتريات المنجزة؟") },
+            text = { Text("تُزال المواد التي تم شراؤها من السلة، وتبقى أسماؤها في القائمة الأساسية.") },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.clearPurchasedFromCart()
+                    filter = CartFilter.REMAINING
+                    showClearPurchasedConfirm = false
+                }) { Text("إزالة") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearPurchasedConfirm = false }) { Text("إلغاء") }
+            }
+        )
     }
 
     if (showFinishConfirm) {

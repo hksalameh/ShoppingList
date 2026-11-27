@@ -74,6 +74,21 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
         persist()
     }
 
+    fun clearAllItems() {
+        items.clear()
+        persist()
+    }
+
+    fun clearPurchasedFromCart() {
+        for (index in items.indices) {
+            val item = items[index]
+            if (item.selected && item.purchased) {
+                items[index] = item.copy(selected = false, purchased = false, quantity = "")
+            }
+        }
+        persist()
+    }
+
     fun finishShopping() {
         for (index in items.indices) {
             val item = items[index]
@@ -142,7 +157,7 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun loadItems(): List<ShoppingItem> {
-        val raw = prefs.getString("items", null) ?: return defaultItems()
+        val raw = prefs.getString("items", null) ?: return emptyList()
         return runCatching {
             val array = JSONArray(raw)
             buildList {
@@ -160,38 +175,7 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                     )
                 }
             }
-        }.getOrElse { defaultItems() }
+        }.getOrElse { emptyList() }
     }
 
-    private fun defaultItems(): List<ShoppingItem> {
-        val groups = linkedMapOf(
-            "لحوم ومجمدات" to listOf(
-                "دجاج", "لحمة", "زنجر", "سمك", "لبنة تركية", "بيض",
-                "جبنة موزاريلا", "بازيلا معلبة", "زبدة", "زيتون"
-            ),
-            "مواد غذائية" to listOf(
-                "رز عادي", "رز بسمتي", "حليب", "قهوة", "عسل", "مكرونة أشكال",
-                "جميد", "فستق", "زبيب", "فطر", "قشطة", "تونة", "ساردين",
-                "مية بندورة", "فول أبيض"
-            ),
-            "بهارات" to listOf(
-                "هيل", "كمون", "فلفل أسود", "ملح", "البهارات السبعة"
-            ),
-            "منظفات وعناية" to listOf(
-                "سائل غسيل الملابس", "سائل جلي", "شامبو للشعر والجسم",
-                "محارم عادية", "محارم مطبخ", "محارم حمام", "مشمعات سفرة",
-                "قصدير", "ورق تغليف الطعام", "كلور", "معطر", "فوط نسائية", "مزيل عرق"
-            )
-        )
-
-        return groups.flatMap { (category, names) ->
-            names.mapIndexed { index, name ->
-                ShoppingItem(
-                    id = "seed-${category.hashCode()}-$index",
-                    name = name,
-                    category = category
-                )
-            }
-        }
-    }
 }
